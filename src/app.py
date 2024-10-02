@@ -91,7 +91,7 @@ def root(): # dBecause we use ASGI, async is added here. If the 3rd party does n
 
 def get_db_connection():
     conn = mysql.connector.connect(\
-    # You can change 'localhost' to the service name 'db' if you're using Docker for MySQL.
+    #can change 'localhost' to the service name 'db' if using Docker for MySQL.
         host=os.getenv("DB_HOST", "localhost"),  
         user=os.getenv("DB_USER", "user"),
         password=os.getenv("DB_PASSWORD", "userpassword"),
