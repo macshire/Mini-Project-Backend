@@ -15,79 +15,6 @@ def root(): # dBecause we use ASGI, async is added here. If the 3rd party does n
     
     print(host, user, password)
     return {"host": host, "user": user, "password": password, "database": database}
-    
-# # Database connections
-# def get_db_connection():
-#     conn = mysql.connector.connect(
-#         host=os.getenv("DB_HOST", "localhost"),
-#         user=os.getenv("DB_USER", "user"),
-#         password=os.getenv("DB_PASSWORD", "userpassword"),
-#         database=os.getenv("DB_NAME", "user_database")
-#     )
-#     return conn
-
-# # Simple route
-# @app.route('/')
-# def home():
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-
-#     # Example: Fetch all users
-#     cursor.execute("SELECT * FROM users")
-#     result = cursor.fetchall()
-
-#     # Print each user row
-#     for row in result:
-#         print(row)
-
-#     cursor.close()
-#     conn.close()
-#     return 'Welcome to the Flask Backend Server!'
-
-# # API for registering a new user
-# @app.route('/register', methods=['POST'])
-# def register():
-#     data = request.json
-#     username = data.get('username')
-#     password = data.get('password')
-
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-
-#     # Insert new user into MySQL database
-#     cursor.execute(
-#         "INSERT INTO users (username, password) VALUES (%s, %s)", 
-#         (username, password)
-#     )
-#     conn.commit()
-
-#     cursor.close()
-#     conn.close()
-
-#     return jsonify({"message": "User registered successfully"}), 201
-
-# # API for logging in a user
-# @app.route('/login', methods=['POST'])
-# def login():
-#     data = request.json
-#     username = data.get('username')
-#     password = data.get('password')
-
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-
-#     # Fetch user from the database
-#     cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, password))
-#     user = cursor.fetchone()
-
-#     cursor.close()
-#     conn.close()
-
-#     if user:
-#         return jsonify({"message": "Login successful"}), 200
-#     else:
-#         return jsonify({"message": "Invalid credentials"}), 401
-# Database connection function
 
 def get_db_connection():
     conn = mysql.connector.connect(\
@@ -186,6 +113,88 @@ def register():
     finally:
         cursor.close()
         conn.close()
+
+#API for handling bookmarks, adding
+@app.route('/books/archive/<int:id>', methods=['POST'])
+def archive_book(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        #retrieve book data from books table based on the objectID (id)
+        cursor.execute("SELECT objectID, title, image, url, author, genre, num_comments, points, ranking FROM bookreview_DB.books WHERE objectID = %s", (id,))
+        book = cursor.fetchone()
+
+        if book:
+            #insert the book into the archived_books table
+            cursor.execute("""
+                INSERT INTO bookreview_DB.archived_books (objectID, title, image, url, author, genre, num_comments, points, ranking)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, book)
+            conn.commit()
+
+
+        return jsonify({"message": "Book archived successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+#API for handling bookmarks, removing
+@app.route('/books/archive/<int:id>', methods=['DELETE'])
+def unarchive_book(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        #retrieve book data from archived_books table based on the objectID (id)
+        cursor.execute("SELECT objectID, title, image, url, author, genre, num_comments, points, ranking FROM bookreview_DB.archived_books WHERE objectID = %s", (id,))
+        book = cursor.fetchone()
+
+        if book:
+            #delete the book from the archived_books table based on objectID
+            cursor.execute("DELETE FROM bookreview_DB.archived_books WHERE objectID = %s", (id,))
+            conn.commit()
+
+
+        return jsonify({"message": "Book unarchived successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+#route to display archived books
+@app.route('/books/archive', methods=['GET'])
+def get_archived_books():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    #selecting from the archived books table
+    cursor.execute("SELECT * FROM bookreview_DB.archived_books")
+
+    archived_books = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    result = [
+        {"objectID": book[0],
+        "image": book[1], 
+        "title": book[2], 
+        "url": book[3], 
+        "author": book[4],
+        "num_comments": book[5],
+        "points": book[6],
+        "genre": book[7],
+        "ranking": book[8]}
+        for book in archived_books
+    ]
+
+    return jsonify(result)
+
 
 # @app.route('/reviews', methods=['DELETE'])
 # def review():
