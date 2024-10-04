@@ -204,5 +204,59 @@ def get_archived_books():
 # def profilePic():
 #     #add in inserting links for profile pictures
 
+#////////////////////////////////////////////////////////////////////////////////////////
+#route to display reviews
+@app.route('/reviews', methods=['GET'])
+def get_reviews():
+    conn = get_db_connection()
+    #obj used to interact with db: cursor **
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM bookreview_DB.reviews")
+    reviews = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    # format result into a list of dictionaries
+    result = [
+        {"id": review[0], "review": review[1], "stars": review[2], "created_at": review[2].strftime('%Y-%m-%d %H:%M:%S')}
+        for review in reviews
+    ]
+
+
+    # return {}
+    return jsonify(result)
+
+#API for adding a review
+@app.route('/reviews', methods=['POST'])
+def comment():
+    data = request.json
+    id = data.get('id')
+    review = data.get('review')
+    stars = data.get('stars')
+
+
+    #connect to the database **
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            #%s is placeholder for string **
+            "INSERT INTO reviews (id, review, stars) VALUES (%s, %s, %s)",
+            (id, review, stars)
+        )
+        conn.commit()
+
+        return jsonify({"message": "User commented successfully"}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000)
+
