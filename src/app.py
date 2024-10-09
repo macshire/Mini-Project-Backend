@@ -219,7 +219,7 @@ def get_reviews():
 
     # format result into a list of dictionaries
     result = [
-        {"id": review[0], "review": review[1], "stars": review[2], "created_at": review[2].strftime('%Y-%m-%d %H:%M:%S')}
+        {"id": review[0], "review": review[1], "stars": review[2], "created_at": review[3].strftime('%Y-%m-%d %H:%M:%S'), "reviewID": review[4], "bookID": review[5]}
         for review in reviews
     ]
 
@@ -228,13 +228,13 @@ def get_reviews():
     return jsonify(result)
 
 #API for adding a review
-@app.route('/reviews', methods=['POST'])
+@app.route('/comment', methods=['POST'])
 def comment():
     data = request.json
     id = data.get('id')
     review = data.get('review')
     stars = data.get('stars')
-
+    bookID = data.get('bookID')
 
     #connect to the database **
     conn = get_db_connection()
@@ -244,12 +244,31 @@ def comment():
 
         cursor.execute(
             #%s is placeholder for string **
-            "INSERT INTO reviews (id, review, stars) VALUES (%s, %s, %s)",
-            (id, review, stars)
+            "INSERT INTO bookreview_DB.reviews (id, review, stars, bookID) VALUES (%s, %s, %s, %s)",
+            (id, review, stars, bookID)
         )
         conn.commit()
 
         return jsonify({"message": "User commented successfully"}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/remove/<int:id>', methods=['DELETE'])
+def delete_review(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        #delete the book from the archived_books table based on objectID
+        cursor.execute("DELETE FROM bookreview_DB.reviews WHERE reviewID = %s", (id,))
+        conn.commit()
+
+
+        return jsonify({"message": "Review deleted successfully"}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
