@@ -52,6 +52,39 @@ def get_users():
     # return {}
     return jsonify(result)
 
+@app.route('/users/<int:id>/profilePic', methods=['PUT'])
+def update_profilePic(id):
+    data = request.get_json()  # Get the JSON payload from the request
+    profilePic = data.get('profilePic')  # Extract profilePic from the payload
+
+    if not profilePic:
+        return jsonify({"error": "No profilePicture link provided"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+        "UPDATE users SET profilePic = %s WHERE id = %s", (profilePic, id)
+        )
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        # Close the cursor and the connection
+        cursor.close()
+        conn.close()
+
+    return jsonify({"message": "Profile picture updated successfully!"}), 200
+
+
 #route to display books
 @app.route('/books', methods=['GET'])
 def get_books():
@@ -194,7 +227,6 @@ def get_archived_books():
     ]
 
     return jsonify(result)
-
 
 # @app.route('/reviews', methods=['DELETE'])
 # def review():
