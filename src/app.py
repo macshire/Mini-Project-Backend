@@ -52,6 +52,39 @@ def get_users():
     # return {}
     return jsonify(result)
 
+@app.route('/users/<int:id>/profilePic', methods=['PUT'])
+def update_profilePic(id):
+    data = request.get_json()  # Get the JSON payload from the request
+    profilePic = data.get('profilePic')  # Extract profilePic from the payload
+
+    if not profilePic:
+        return jsonify({"error": "No profilePicture link provided"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+        "UPDATE users SET profilePic = %s WHERE id = %s", (profilePic, id)
+        )
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        # Close the cursor and the connection
+        cursor.close()
+        conn.close()
+
+    return jsonify({"message": "Profile picture updated successfully!"}), 200
+
+
 #route to display books
 @app.route('/books', methods=['GET'])
 def get_books():
@@ -87,11 +120,26 @@ def get_books():
 def register():
     #get username and password from the request
     data = request.json
+    print(f"Income data: {data}")
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
 
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
+
+    # Firebase authentication process
+    try:
+        # Assume firebase_auth is the Firebase Admin SDK
+        user = firebase_auth.create_user(
+            email=email,
+            password=password,
+            username=username
+        )
+        uid = user.uid  # Retrieve Firebase UID for the user
+
+    except Exception as e:
+        return jsonify({"error": "Firebase authentication failed", "details": str(e)}), 500
 
     #connect to the database **
     conn = get_db_connection()
@@ -101,8 +149,8 @@ def register():
         #insert new user into bookReview_DB
         cursor.execute(
             #%s is placeholder for string **
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
-            (username, password)
+            "INSERT INTO users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
+            (username, password, email, uid)
         )
         conn.commit()
 
@@ -195,7 +243,6 @@ def get_archived_books():
 
     return jsonify(result)
 
-
 # @app.route('/reviews', methods=['DELETE'])
 # def review():
 #     #add in deleting review and removing it from DB logic
@@ -204,5 +251,78 @@ def get_archived_books():
 # def profilePic():
 #     #add in inserting links for profile pictures
 
+#////////////////////////////////////////////////////////////////////////////////////////
+#route to display reviews
+@app.route('/reviews', methods=['GET'])
+def get_reviews():
+    conn = get_db_connection()
+    #obj used to interact with db: cursor **
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM bookreview_DB.reviews")
+    reviews = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    # format result into a list of dictionaries
+    result = [
+        {"id": review[0], "review": review[1], "stars": review[2], "created_at": review[3].strftime('%Y-%m-%d %H:%M:%S'), "reviewID": review[4], "bookID": review[5]}
+        for review in reviews
+    ]
+
+
+    # return {}
+    return jsonify(result)
+
+#API for adding a review
+@app.route('/comment', methods=['POST'])
+def comment():
+    data = request.json
+    id = data.get('id')
+    review = data.get('review')
+    stars = data.get('stars')
+    bookID = data.get('bookID')
+
+    #connect to the database **
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            #%s is placeholder for string **
+            "INSERT INTO bookreview_DB.reviews (id, review, stars, bookID) VALUES (%s, %s, %s, %s)",
+            (id, review, stars, bookID)
+        )
+        conn.commit()
+
+        return jsonify({"message": "User commented successfully"}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/remove/<int:id>', methods=['DELETE'])
+def delete_review(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        #delete the book from the archived_books table based on objectID
+        cursor.execute("DELETE FROM bookreview_DB.reviews WHERE reviewID = %s", (id,))
+        conn.commit()
+
+
+        return jsonify({"message": "Review deleted successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000)
+
