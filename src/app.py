@@ -120,11 +120,26 @@ def get_books():
 def register():
     #get username and password from the request
     data = request.json
+    print(f"Income data: {data}")
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
 
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
+
+    # Firebase authentication process
+    try:
+        # Assume firebase_auth is the Firebase Admin SDK
+        user = firebase_auth.create_user(
+            email=email,
+            password=password,
+            username=username
+        )
+        uid = user.uid  # Retrieve Firebase UID for the user
+
+    except Exception as e:
+        return jsonify({"error": "Firebase authentication failed", "details": str(e)}), 500
 
     #connect to the database **
     conn = get_db_connection()
@@ -134,8 +149,8 @@ def register():
         #insert new user into bookReview_DB
         cursor.execute(
             #%s is placeholder for string **
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
-            (username, password)
+            "INSERT INTO users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
+            (username, password, email, uid)
         )
         conn.commit()
 
