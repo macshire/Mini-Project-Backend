@@ -128,7 +128,7 @@ def register():
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
 
-    # Firebase authentication process
+    #firebase authentication process
     try:
         # Assume firebase_auth is the Firebase Admin SDK
         user = firebase_auth.create_user(
@@ -136,7 +136,8 @@ def register():
             password=password,
             username=username
         )
-        uid = user.uid  # Retrieve Firebase UID for the user
+        #retrieve Firebase UID for the user
+        uid = user.uid  
 
     except Exception as e:
         return jsonify({"error": "Firebase authentication failed", "details": str(e)}), 500
