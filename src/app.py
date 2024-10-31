@@ -2,9 +2,26 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
 import os
+#firebase
+import firebase_admin
+from firebase_admin import auth as firebase_auth, credentials
+#email provider for sending email
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import logging
+
+# Set up logging (adjust level as necessary)
+logging.basicConfig(level=logging.INFO)
+
 
 app = Flask(__name__)
 CORS(app)
+
+#initialize Firebase Admin SDK
+cred = credentials.Certificate("config/hybridtechnologies-miniproject-firebase-adminsdk-l99aa-210da4ec8d.json")
+firebase_admin.initialize_app(cred)
 
 @app.get("/") # Like flask, declares get method and url
 def root(): # dBecause we use ASGI, async is added here. If the 3rd party does not support it, then remove async
@@ -125,22 +142,35 @@ def register():
     password = data.get('password')
     email = data.get('email')
 
-    if not username or not password:
+    logging.info(f"Registering user - Username: {username}, Email: {email}, Password Length: {len(password) if password else 'N/A'}")
+
+    if not username or not password or not email:
         return jsonify({"error": "Username and password are required"}), 400
 
-    #firebase authentication process
+    # Firebase authentication process
     try:
-        # Assume firebase_auth is the Firebase Admin SDK
-        user = firebase_auth.create_user(
-            email=email,
-            password=password,
-            username=username
-        )
-        #retrieve Firebase UID for the user
-        uid = user.uid  
+        # Attempt to create the user in Firebase
+        try:
+            user = firebase_auth.create_user(email=email, password=password, display_name=username)
+            logging.info(f"User created in Firebase with UID: {user.uid}")
+        except Exception as e:
+            logging.error("Error creating user in Firebase:", exc_info=True)
+            return jsonify({"error": "Failed to create user in Firebase", "details": str(e)}), 501
+
+        # Attempt to retrieve UID after user creation
+        try:
+            uid = user.uid
+        except AttributeError as e:
+            return jsonify({"error": "Failed to retrieve UID for the user", "details": str(e)}), 502
+
+        # Attempt to send verification email
+        try:
+            send_verification_email(email)
+        except Exception as e:
+            return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
 
     except Exception as e:
-        return jsonify({"error": "Firebase authentication failed", "details": str(e)}), 500
+        return jsonify({"error": "Firebase authentication process failed", "details": str(e)}), 500
 
     #connect to the database **
     conn = get_db_connection()
@@ -158,10 +188,36 @@ def register():
         return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 501
     finally:
         cursor.close()
         conn.close()
+
+def send_verification_email(email):
+    #generating a verfication link
+    veritifcation_link = firebase_auth.generate_email_verification_link(email)
+    #email content
+    sender_email = "YOUR_EMAIL@gmail.com"
+    sender_password = "YOUR_APP_PASSWORD"
+    subject = "Verify Your Email"
+    body = f"Please verify your email by clicking this link: {verification_link}"
+
+    #create MIME email message
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        #send email using smtplib (this example uses Gmail's SMTP server)
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, email, msg.as_string())
+            print(f"Verification email sent to: {email}")
+    except Exception as e:
+        print(f"Error sending email: {e}")
 
 #API for handling bookmarks, adding
 @app.route('/books/archive/<int:id>', methods=['POST'])
@@ -251,6 +307,12 @@ def get_archived_books():
 # @app.route('/users', methods=['PUT'])
 # def profilePic():
 #     #add in inserting links for profile pictures
+
+@app.route('/message', methods=['POST'])
+def message_user():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
 
 #////////////////////////////////////////////////////////////////////////////////////////
 #route to display reviews
