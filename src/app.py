@@ -4,7 +4,8 @@ import mysql.connector
 import os
 #firebase
 import firebase_admin
-from firebase_admin import auth as firebase_auth, credentials
+from firebase_admin import auth 
+from firebase_admin import credentials
 #email provider for sending email
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -151,8 +152,11 @@ def register():
     try:
         # Attempt to create the user in Firebase
         try:
-            user = firebase_auth.create_user(email=email, password=password, display_name=username)
+            user = auth.create_user(email=email, password=password, display_name=username)
             logging.info(f"User created in Firebase with UID: {user.uid}")
+
+        except auth.EmailAlreadyExistsError:
+            return jsonify({"error": "This email address is already in use. Please log in."}), 409
         except Exception as e:
             logging.error("Error creating user in Firebase:", exc_info=True)
             return jsonify({"error": "Failed to create user in Firebase", "details": str(e)}), 501
