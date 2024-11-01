@@ -11,6 +11,10 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+#retrieve email and password from environment variables
+SENDER_EMAIL = os.getenv('SENDER_EMAIL')
+SENDER_PASSWORD = os.getenv('SENDER_PASSWORD')
+
 import logging
 
 # Set up logging (adjust level as necessary)
@@ -115,7 +119,7 @@ def get_books():
     cursor.close()
     conn.close()
 
-    # format result into a list of dictionaries
+    #format result into a list of dictionaries
     result = [
         {"objectID": book[0],
         "image": book[1], 
@@ -129,16 +133,17 @@ def get_books():
         for book in books
     ]
 
-    # return {} eeee
+    #return {} eeee
     return jsonify(result)
 
 
 #API for registering a new user
 @app.route('/register', methods=['POST'])
 def register():
-    #get username and password from the request
+    #get username, password, and email from the request
     data = request.json
-    print(f"Income data: {data}")
+    logging.info(f"Incoming registration data: {data}")
+    
     username = data.get('username')
     password = data.get('password')
     email = data.get('email')
@@ -146,82 +151,105 @@ def register():
     logging.info(f"Registering user - Username: {username}, Email: {email}, Password Length: {len(password) if password else 'N/A'}")
 
     if not username or not password or not email:
-        return jsonify({"error": "Username and password are required"}), 400
+        return jsonify({"error": "Username, password, and email are required"}), 400
 
-    # Firebase authentication process
+    #firebase email-password authentication 
     try:
-        # Attempt to create the user in Firebase
+        #attempt to create the user in Firebase
         try:
             user = auth.create_user(email=email, password=password, display_name=username)
-            logging.info(f"User created in Firebase with UID: {user.uid}")
-
+            uid = user.uid
+            logging.info(f"User created in Firebase with UID: {uid}")
         except auth.EmailAlreadyExistsError:
-            return jsonify({"error": "This email address is already in use. Please log in."}), 409
+            #if user exists, fetch the user and send verification email
+            existing_user = auth.get_user_by_email(email)
+            uid = existing_user.uid
+            logging.info(f"User with email {email} already exists in Firebase. Sending verification email.")
+            try:
+                send_verification_email(email)
+                return jsonify({"message": "Verification email resent. Please check your inbox."}), 200
+            except Exception as e:
+                logging.error("Error sending verification email:", exc_info=True)
+                return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
         except Exception as e:
             logging.error("Error creating user in Firebase:", exc_info=True)
             return jsonify({"error": "Failed to create user in Firebase", "details": str(e)}), 501
 
-        # Attempt to retrieve UID after user creation
-        try:
-            uid = user.uid
-        except AttributeError as e:
-            return jsonify({"error": "Failed to retrieve UID for the user", "details": str(e)}), 502
-
-        # Attempt to send verification email
-        try:
-            send_verification_email(email)
-        except Exception as e:
-            return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
-
     except Exception as e:
+        logging.error("Firebase authentication process failed:", exc_info=True)
         return jsonify({"error": "Firebase authentication process failed", "details": str(e)}), 500
 
-    #connect to the database **
+    #connect to the database and store the user
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         #insert new user into bookReview_DB
         cursor.execute(
-            #%s is placeholder for string **
-            "INSERT INTO users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO bookReview_DB.users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
             (username, password, email, uid)
         )
         conn.commit()
-
+        logging.info(f"User {username} stored in MySQL database with UID: {uid}")
         return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 501
+        logging.error("Error storing user in MySQL database:", exc_info=True)
+        return jsonify({"error": "Failed to store user in MySQL database", "details": str(e)}), 501
     finally:
         cursor.close()
         conn.close()
 
+
 def send_verification_email(email):
-    #generating a verfication link
-    veritifcation_link = firebase_auth.generate_email_verification_link(email)
+    #generate link for verification
+    try:
+        verification_link = auth.generate_email_verification_link(email)
+    except Exception as e:
+        print(f"Error generating verification link: {e}")
+        return
+
     #email content
-    sender_email = "YOUR_EMAIL@gmail.com"
-    sender_password = "YOUR_APP_PASSWORD"
     subject = "Verify Your Email"
     body = f"Please verify your email by clicking this link: {verification_link}"
 
-    #create MIME email message
+    #MIME email message
     msg = MIMEMultipart()
-    msg['From'] = sender_email
+    msg['From'] = SENDER_EMAIL
     msg['To'] = email
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
     try:
-        #send email using smtplib (this example uses Gmail's SMTP server)
+        # Send email using smtplib (this example uses Gmail's SMTP server)
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, email, msg.as_string())
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, email, msg.as_string())
             print(f"Verification email sent to: {email}")
+    except smtplib.SMTPException as e:
+        print(f"SMTP error sending email: {e}")
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"General error sending email: {e}")
+
+
+# Function to log all existing Firebase users
+def log_all_firebase_users():
+    # Initialize an empty list to hold user info
+    users_list = []
+    page = auth.list_users()
+
+    # Iterate through each page of users
+    while page:
+        for user in page.users:
+            users_list.append({
+                "uid": user.uid,
+                "email": user.email,
+                "display_name": user.display_name
+            })
+        page = page.get_next_page()
+
+    logging.info(f"Existing Firebase users: {users_list}")
 
 #API for handling bookmarks, adding
 @app.route('/books/archive/<int:id>', methods=['POST'])
