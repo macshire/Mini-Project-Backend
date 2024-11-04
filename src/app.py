@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 load_dotenv()
 
 #retrieve email and password from environment variables
-SENDER_EMAIL = os.getenv('SENDER_EMAIL')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL') 
 SENDER_PASSWORD = os.getenv('SENDER_PASSWORD')
 
 import logging
@@ -228,14 +228,27 @@ def send_verification_email(email):
     
     try:
         # Send email using smtplib (this example uses Gmail's SMTP server)
+        logging.info("Starting SMTP server connection...")
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            logging.info("Connected to SMTP server.")
+            # Start TLS and log the progress
             server.ehlo()
+            logging.info("EHLO sent.")
             server.starttls()
+            logging.info("TLS session started.")
             server.ehlo()
+            logging.info("EHLO sent again after TLS.")
+            # Login and send email
+            if SENDER_EMAIL is None or SENDER_PASSWORD is None:
+                logging.error("Email or password environment variable is missing.")
+            else:
+                logging.info(f"Attempting to log in with SENDER_EMAIL: {SENDER_EMAIL}")
+
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            logging.info("Logged into SMTP server.")
             server.sendmail(SENDER_EMAIL, email, msg.as_string())
-            print(f"Verification email sent to: {email}")
-            logging.info(f"sent to {email}")
+            logging.info("Email sent.")
+
     except smtplib.SMTPException as e:
         print(f"SMTP error sending email: {e}")
     except Exception as e:
