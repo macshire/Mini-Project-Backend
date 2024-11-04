@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
+from dotenv import load_dotenv
 import os
 #firebase
 import firebase_admin
@@ -10,6 +11,8 @@ from firebase_admin import credentials
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+load_dotenv()
 
 #retrieve email and password from environment variables
 SENDER_EMAIL = os.getenv('SENDER_EMAIL')
@@ -39,7 +42,7 @@ def root(): # dBecause we use ASGI, async is added here. If the 3rd party does n
     return {"host": host, "user": user, "password": password, "database": database}
 
 def get_db_connection():
-    conn = mysql.connector.connect(\
+    conn = mysql.connector.connect(
     #can change 'localhost' to the service name 'db' if using Docker for MySQL.
         host=os.getenv("DB_HOST", "localhost"),  
         user=os.getenv("DB_USER", "user"),
@@ -167,6 +170,7 @@ def register():
             logging.info(f"User with email {email} already exists in Firebase. Sending verification email.")
             try:
                 send_verification_email(email)
+                logging.info(f"attempting to send verification to {email}")
                 return jsonify({"message": "Verification email resent. Please check your inbox."}), 200
             except Exception as e:
                 logging.error("Error sending verification email:", exc_info=True)
@@ -205,6 +209,8 @@ def send_verification_email(email):
     #generate link for verification
     try:
         verification_link = auth.generate_email_verification_link(email)
+        logging.info(f"le email is {email}")
+        logging.info(f"Sender email is {SENDER_EMAIL}")
     except Exception as e:
         print(f"Error generating verification link: {e}")
         return
@@ -219,19 +225,21 @@ def send_verification_email(email):
     msg['To'] = email
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
-
+    
     try:
         # Send email using smtplib (this example uses Gmail's SMTP server)
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.ehlo()
             server.starttls()
+            server.ehlo()
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.sendmail(SENDER_EMAIL, email, msg.as_string())
             print(f"Verification email sent to: {email}")
+            logging.info(f"sent to {email}")
     except smtplib.SMTPException as e:
         print(f"SMTP error sending email: {e}")
     except Exception as e:
         print(f"General error sending email: {e}")
-
 
 # Function to log all existing Firebase users
 def log_all_firebase_users():
