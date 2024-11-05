@@ -11,6 +11,7 @@ from firebase_admin import credentials
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+#import socketio
 
 load_dotenv()
 
@@ -238,12 +239,7 @@ def send_verification_email(email):
             logging.info("TLS session started.")
             server.ehlo()
             logging.info("EHLO sent again after TLS.")
-            # Login and send email
-            if SENDER_EMAIL is None or SENDER_PASSWORD is None:
-                logging.error("Email or password environment variable is missing.")
-            else:
-                logging.info(f"Attempting to log in with SENDER_EMAIL: {SENDER_EMAIL}")
-
+            logging.info(f"Attempting to log in with SENDER_EMAIL: {SENDER_EMAIL}")
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             logging.info("Logged into SMTP server.")
             server.sendmail(SENDER_EMAIL, email, msg.as_string())
@@ -253,6 +249,76 @@ def send_verification_email(email):
         print(f"SMTP error sending email: {e}")
     except Exception as e:
         print(f"General error sending email: {e}")
+
+# @app.route('/register', methods=['POST'])
+# def register():
+#     # Get username, password, and email from the request
+#     data = request.json
+#     logging.info(f"Incoming registration data: {data}")
+
+#     username = data.get('username')
+#     password = data.get('password')
+#     email = data.get('email')
+
+#     logging.info(f"Registering user - Username: {username}, Email: {email}, Password Length: {len(password) if password else 'N/A'}")
+
+#     if not username or not password or not email:
+#         return jsonify({"error": "Username, password, and email are required"}), 400
+
+#     # Firebase email-password authentication
+#     try:
+#         # Attempt to create the user in Firebase
+#         try:
+#             user = auth.create_user(email=email, password=password, display_name=username)
+#             uid = user.uid
+#             logging.info(f"User created in Firebase with UID: {uid}")
+
+#             # Generate and send verification email
+#             try:
+#                 verification_link = auth.generate_email_verification_link(email)
+#                 logging.info(f"Verification email sent to {email}")
+#                 return jsonify({"message": "User registered successfully. Verification email sent."}), 201
+#             except Exception as e:
+#                 logging.error("Error sending verification email:", exc_info=True)
+#                 return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
+
+#         except auth.EmailAlreadyExistsError:
+#             # If user exists, fetch the user and send verification email again
+#             existing_user = auth.get_user_by_email(email)
+#             uid = existing_user.uid
+#             logging.info(f"User with email {email} already exists in Firebase. Sending verification email.")
+#             try:
+#                 verification_link = auth.generate_email_verification_link(email)
+#                 logging.info(f"Verification email resent to {email}, {verification_link}")
+#                 return jsonify({"message": "Verification email resent. Please check your inbox."}), 200
+#             except Exception as e:
+#                 logging.error("Error sending verification email:", exc_info=True)
+#                 return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
+
+#     except Exception as e:
+#         logging.error("Firebase authentication process failed:", exc_info=True)
+#         return jsonify({"error": "Firebase authentication process failed", "details": str(e)}), 500
+
+#     # Connect to the database and store the user
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+
+#     try:
+#         # Insert new user into bookReview_DB
+#         cursor.execute(
+#             "INSERT INTO bookReview_DB.users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
+#             (username, password, email, uid)
+#         )
+#         conn.commit()
+#         logging.info(f"User {username} stored in MySQL database with UID: {uid}")
+#         return jsonify({"message": "User registered successfully"}), 201
+#     except Exception as e:
+#         conn.rollback()
+#         logging.error("Error storing user in MySQL database:", exc_info=True)
+#         return jsonify({"error": "Failed to store user in MySQL database", "details": str(e)}), 501
+#     finally:
+#         cursor.close()
+#         conn.close()
 
 # Function to log all existing Firebase users
 def log_all_firebase_users():
