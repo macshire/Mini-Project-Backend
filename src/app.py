@@ -231,8 +231,8 @@ def send_verification_email(email):
         # Send email using smtplib (this example uses Gmail's SMTP server)
         logging.info("Starting SMTP server connection...")
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            logging.info("Connected to SMTP server.")
             # Start TLS and log the progress
+            logging.info("Connected to SMTP server.")
             server.ehlo()
             logging.info("EHLO sent.")
             server.starttls()
