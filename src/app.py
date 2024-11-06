@@ -172,7 +172,7 @@ def register():
             try:
                 send_verification_email(email)
                 logging.info(f"attempting to send verification to {email}")
-                return jsonify({"message": "Verification email resent. Please check your inbox."}), 200
+                #return jsonify({"message": "Verification email resent. Please check your inbox."}), 200
             except Exception as e:
                 logging.error("Error sending verification email:", exc_info=True)
                 return jsonify({"error": "Failed to send verification email", "details": str(e)}), 503
@@ -189,9 +189,9 @@ def register():
     cursor = conn.cursor()
 
     try:
-        #insert new user into bookReview_DB
+        #insert new user into bookreview_DB
         cursor.execute(
-            "INSERT INTO bookReview_DB.users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO bookreview_DB.users (username, password, email, uid) VALUES (%s, %s, %s, %s)",
             (username, password, email, uid)
         )
         conn.commit()
@@ -244,6 +244,7 @@ def send_verification_email(email):
             logging.info("Logged into SMTP server.")
             server.sendmail(SENDER_EMAIL, email, msg.as_string())
             logging.info("Email sent.")
+            # can add insert values logic here for new users
 
     except smtplib.SMTPException as e:
         print(f"SMTP error sending email: {e}")
