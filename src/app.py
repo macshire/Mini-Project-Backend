@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_socketio import SocketIO, join_room, leave_room, send
 import mysql.connector
 from dotenv import load_dotenv
 import os
@@ -27,6 +28,7 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app)
 
 #initialize Firebase Admin SDK
 cred = credentials.Certificate("config/hybridtechnologies-miniproject-firebase-adminsdk-l99aa-210da4ec8d.json")
