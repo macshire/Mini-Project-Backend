@@ -219,8 +219,10 @@ def send_verification_email(email):
         return
 
     #email content
-    subject = "Verify Your Email"
-    body = f"Please verify your email by clicking this link: {verification_link}"
+    #subject = "Verify Your Email"
+    #body = f"Please verify your email by clicking this link: {verification_link}"
+    subject = f"{username} VERIFY UR EMAIL PLEASE"
+    body = f"CLICK THE LINK NOW: {verification_link}"
 
     #MIME email message
     msg = MIMEMultipart()
@@ -507,6 +509,31 @@ def delete_review(id):
     finally:
         cursor.close()
         conn.close()
+
+#live chat route
+@app.route('/chat', methods=['POST'])
+def create_chat():
+    data = request.json
+    user_id = data.get("user_id")
+    target_user_id = data.get("target_user_id")
+    room_name = f"{user_id}_{target_user_id}"
+    # Create room and return to frontend
+    return jsonify({"room": room_name})
+
+@socketio.on('join')
+def handle_join(data):
+    join_room(data['room'])
+    send(f"{data['username']} has joined the room.", room=data['room'])
+
+@socketio.on('message')
+def handle_message(data):
+    room = data['room']
+    send(data['message'], room=room)
+
+@socketio.on('leave')
+def handle_leave(data):
+    leave_room(data['room'])
+    send(f"{data['username']} has left the room.", room=data['room'])
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000)
