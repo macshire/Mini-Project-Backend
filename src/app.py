@@ -12,6 +12,7 @@ from firebase_admin import credentials
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from datetime import datetime
 #import socketio
 
 load_dotenv()
@@ -510,14 +511,39 @@ def delete_review(id):
         cursor.close()
         conn.close()
 
-#live chat route
 @app.route('/chat', methods=['POST'])
 def create_chat():
     data = request.json
     user_id = data.get("user_id")
     target_user_id = data.get("target_user_id")
-    room_name = f"{user_id}_{target_user_id}"
-    # Create room and return to frontend
+
+    #connect to db
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    #check if a conversation already exists
+    cursor.execute("""
+        SELECT conversation_id FROM conversations
+        WHERE (user1_id = %s AND user2_id = %s) OR (user1_id = %s AND user2_id = %s)
+    """, (user_id, target_user_id, target_user_id, user_id))
+    result = cursor.fetchone()
+
+    if result:
+        room_name = f"conversation_{result['conversation_id']}"
+    else:
+        #create new conversation if it doesn't exist
+        cursor.execute("""
+            INSERT INTO conversations (user1_id, user2_id)
+            VALUES (%s, %s)
+        """, (user_id, target_user_id))
+        conn.commit()
+        conversation_id = cursor.lastrowid
+        room_name = f"conversation_{conversation_id}"
+
+    cursor.close()
+    conn.close()
+
+    #return room name to frontend
     return jsonify({"room": room_name})
 
 @socketio.on('join')
@@ -528,13 +554,36 @@ def handle_join(data):
 @socketio.on('message')
 def handle_message(data):
     room = data['room']
-    send(data['message'], room=room)
+    message_text = data['message']
+    sender_id = data['sender_id']
+    receiver_id = data['receiver_id']
+    #extract conversation_id from room name
+    conversation_id = int(data['room'].split('_')[-1])  
+
+    # Store the message in the database
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO messages (sender_id, receiver_id, message_text, conversation_id)
+            VALUES (%s, %s, %s, %s)
+        """, (sender_id, receiver_id, message_text, conversation_id))
+        conn.commit()
+    except Exception as e:
+        print(f"Database error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Broadcast message to the room
+    send(message_text, room=room)
 
 @socketio.on('leave')
 def handle_leave(data):
     leave_room(data['room'])
     send(f"{data['username']} has left the room.", room=data['room'])
 
+#might have to change to soketio
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000)
 
